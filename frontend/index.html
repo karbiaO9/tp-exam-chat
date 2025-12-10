@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mini Chat — TP Exam</title>
+  <style>
+    :root{--bg:#f6f8fb;--card:#fff;--muted:#6b7280}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial}
+    body{background:linear-gradient(180deg,#eef2ff 0%,var(--bg) 100%);display:flex;align-items:center;justify-content:center;padding:24px}
+    .app{width:100%;max-width:800px;background:var(--card);border-radius:12px;box-shadow:0 6px 24px rgba(20,20,50,.08);overflow:hidden;display:flex;flex-direction:column}
+    header{padding:16px 20px;border-bottom:1px solid #eef2ff;display:flex;gap:12px;align-items:center}
+    .brand{font-weight:700;font-size:18px}
+    main{padding:16px;display:flex;flex-direction:column;gap:12px}
+    .controls{display:flex;gap:8px;flex-wrap:wrap}
+    input[type=text],button,select{padding:8px 10px;border-radius:8px;border:1px solid #e6e9f2}
+    #messages{height:400px;overflow:auto;padding:12px;border-radius:8px;background:#fbfdff;border:1px solid #f0f4ff}
+    .msg{padding:8px;border-radius:8px;margin-bottom:8px;background:linear-gradient(180deg,#fff,#fbfbff);box-shadow:0 1px 0 rgba(20,20,50,.03)}
+    .meta{font-size:12px;color:var(--muted);margin-bottom:6px}
+    footer{display:flex;gap:8px;padding:12px;border-top:1px solid #eef2ff}
+    @media (max-width:520px){.app{max-width:100%;height:100vh;border-radius:0}#messages{height:60vh}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand">Mini Chat — TP Exam</div>
+      <div style="margin-left:auto;font-size:12px;color:#9ca3af">Auto-refresh every 4s • No DB (in-memory)</div>
+    </header>
+
+    <main>
+      <div class="controls">
+        <input id="backendUrl" type="text" style="flex:1" placeholder="Backend URL (e.g. https://your-render-app.onrender.com)" />
+        <button id="saveUrl">Save</button>
+      </div>
+
+      <div style="display:flex;gap:8px;">
+        <input id="pseudo" type="text" placeholder="Votre pseudo" />
+        <button id="setPseudo">Set</button>
+      </div>
+
+      <div id="messages" aria-live="polite" ></div>
+    </main>
+
+    <footer>
+      <input id="content" type="text" placeholder="Ecrire un message..." style="flex:1" />
+      <button id="send">Envoyer</button>
+      <button id="refresh">Refresh</button>
+    </footer>
+  </div>
+
+  <script>
+    // Minimal single-file frontend. No build step required.
+    const DEFAULT_REFRESH_MS = 4000;
+    let API_BASE = localStorage.getItem('API_BASE') || '';
+    const backendInput = document.getElementById('backendUrl');
+    backendInput.value = API_BASE || '';
+    const saveUrlBtn = document.getElementById('saveUrl');
+    saveUrlBtn.onclick = () => { API_BASE = backendInput.value.trim(); localStorage.setItem('API_BASE', API_BASE); alert('Backend URL saved.'); }
+
+    const pseudoInput = document.getElementById('pseudo');
+    document.getElementById('setPseudo').onclick = () => { const p = pseudoInput.value.trim(); if(!p) return alert('Enter pseudo'); localStorage.setItem('CHAT_PSEUDO', p); alert('Pseudo saved'); }
+    const MSG_BOX = document.getElementById('messages');
+    const contentInput = document.getElementById('content');
+
+    function api(path, options){
+      if(!API_BASE) return Promise.reject(new Error('Backend URL not set.'));
+      return fetch(API_BASE + path, options).then(r => { if(!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+    }
+
+    function fmtTime(ts){ return new Date(ts).toLocaleString(); }
+
+    async function loadMessages(){
+      try{
+        const data = await api('/api/messages');
+        MSG_BOX.innerHTML = '';
+        data.forEach(m => {
+          const el = document.createElement('div'); el.className='msg';
+          const meta = document.createElement('div'); meta.className='meta'; meta.textContent = m.author + ' • ' + fmtTime(m.ts);
+          const body = document.createElement('div'); body.textContent = m.content;
+          el.appendChild(meta); el.appendChild(body);
+          MSG_BOX.appendChild(el);
+        });
+        MSG_BOX.scrollTop = MSG_BOX.scrollHeight;
+      }catch(err){
+        MSG_BOX.innerHTML = '<div style="color:#b91c1c">Error: '+err.message+'</div>';
+      }
+    }
+
+    async function sendMessage(){
+      const author = localStorage.getItem('CHAT_PSEUDO') || pseudoInput.value.trim();
+      const content = contentInput.value.trim();
+      if(!author) return alert('Set your pseudo first');
+      if(!content) return;
+      try{
+        await api('/api/messages', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({author,content})});
+        contentInput.value='';
+        await loadMessages();
+      }catch(err){ alert('Send failed: '+err.message); }
+    }
+
+    document.getElementById('send').onclick = sendMessage;
+    document.getElementById('refresh').onclick = loadMessages;
+
+    // Auto-refresh
+    setInterval(()=>{ if(API_BASE) loadMessages().catch(()=>{}); }, DEFAULT_REFRESH_MS);
+
+    // Initial load (if API_BASE set)
+    if(API_BASE) loadMessages();
+  </script>
+</body>
+</html>
