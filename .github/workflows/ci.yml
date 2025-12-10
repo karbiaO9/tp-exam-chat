@@ -1,0 +1,38 @@
+name: CI
+on:
+push:
+branches: [ main, master ]
+pull_request:
+branches: [ main, master ]
+
+
+jobs:
+backend:
+runs-on: ubuntu-latest
+steps:
+- uses: actions/checkout@v4
+- name: Use Node.js
+uses: actions/setup-node@v4
+with:
+node-version: '18'
+- name: Install backend deps
+working-directory: ./backend
+run: npm ci
+- name: Run backend tests
+working-directory: ./backend
+run: npm test
+
+
+frontend:
+runs-on: ubuntu-latest
+steps:
+- uses: actions/checkout@v4
+- name: Build frontend Docker image
+working-directory: ./frontend
+run: docker build -t tp-exam-chat-frontend:ci .
+- name: Smoke test frontend Docker image
+working-directory: ./frontend
+run: |
+docker run --rm -d -p 8081:80 tp-exam-chat-frontend:ci
+sleep 2
+curl -f http://localhost:8081 || (docker ps -a && exit 1)
